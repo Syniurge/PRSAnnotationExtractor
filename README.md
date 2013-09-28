@@ -21,6 +21,8 @@ Usage
 
         ruby prsannotextract.rb <.annot input> <.epub input>
 
+Will generate an HTML file to the standard output.
+
 On my PRS-650 the .annot files can be found in /Digital Editions/Annotations/database/media/books.
 
 The three .rb files must be in the same folder.
