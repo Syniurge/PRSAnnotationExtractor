@@ -1,15 +1,17 @@
+#!/usr/bin/ruby
+
 # encoding: utf-8
 
 # Pre-PRS-T1 Sony Readers (and possibly other ADE-based readers) annotation extraction tool
 # Required gems: nokogiri, csspool and zipruby
-#   ruby prsannotextract.rb <.annot input> <.epub input>
+#   ruby -I. prsannotextract.rb <.annot input> <.epub input>
 
 # Author: Elie 'Syniurge' Morisse
 # License: MIT
 # Date (version): 2013-09-27
 
 require 'nokogiri'
-require 'csspool'
+require_relative 'csspool'
 
 require 'zipruby'
 require 'date'
@@ -21,8 +23,8 @@ require 'pathname'
 # we want to preserve parts of the style, there's no other way but to add all this stuff.
 # Maybe this should be included someday somehow in Nokogiri and/or CSSPool.
 
-require './inlineparser'
-require './inlinetokenizer'
+require_relative 'inlineparser'
+require_relative 'inlinetokenizer'
 
 module CSSPool::CSS
   class Property
@@ -33,62 +35,62 @@ module CSSPool::CSS
       @initval = initval.is_a?(String) ? CSSPool::Terms::Ident.new(initval) : initval
       @inherit = inherit
     end
-    
+
     DEFAULTS = {
       'background-color' => Property.new('', true),
-      
+
       'color' => Property.new('', true),
-      
+
       'display' => Property.new('inline', false),
-      
+
       'font-style' => Property.new('normal', true),
       'font-size' => Property.new('normal', true),
       'font-variant' => Property.new('normal', true),
       'font-weight' => Property.new('normal', true),
-      
+
       'text-align' => Property.new('', true),
       'text-decoration' => Property.new('none', false),
       'text-transform' => Property.new('none', true),
-      
+
       'white-space' => Property.new('normal', true),
     }
   end
-  
+
   class Style < Hash
     def initialize()
       super CSSPool::Terms::Ident.new('')
     end
-    
+
     def add_declarations! decls
       for decl in decls
         self[decl.property] = decl.expressions
       end
     end
-    
+
     def inherit! style
       style.each do |property, expressions|
         inherit = false
-        
+
         if Property::DEFAULTS.has_key? property
           inherit = Property::DEFAULTS[property].inherit
         end
-        
+
         if self[property] == 'inherit'
           inherit = true
         elsif self.has_key? property
           next  # the property value is already determined
         end
-        
+
         if not inherit
           next
         end
-        
+
         self[property] = expressions
       end
     end
-    
+
     alias :<< :inherit!
-    
+
     # NOTE: Return a string but not the value itself
     def [](key)
       if !has_key?(key) and Property::DEFAULTS.has_key?(key)
@@ -98,9 +100,9 @@ module CSSPool::CSS
       end
       to_css value
     end
-    
+
     private
-    
+
     def to_css expr
       if expr.is_a? Array
         retval, pre = '', ''
@@ -114,7 +116,7 @@ module CSSPool::CSS
       end
     end
   end
-  
+
   # CSSPool racc/rexical parser stripped down to parse only declarations
   # There is unfortunately no way to reuse the CSSPool parser so racc and rexical files were duplicated
   class InlineHandler
@@ -141,9 +143,9 @@ module CSSPool::CSS
       @handler.declarations
     end
   end
-  
+
   # Recommended default stylesheet from http://www.w3.org/TR/CSS2/sample.html
-  DEFAULT_STYLESHEET = <<-CSS
+  DEFAULT_STYLESHEET = CSSPool::SAC::Parser.new.parse <<-CSS
   html, address,
   blockquote,
   body, dd, div,
@@ -232,60 +234,72 @@ module Nokogiri::XML
       if @style
         return @style
       end
-      
+
       @style = CSSPool::CSS::Style.new
-      
+
       # First refer to the cssdoc stylesheet
-      document.stylesheet.rule_sets.each do |rs|
-        for selector in rs.selectors
-          # FIXME: Nokogiri doesn't support many of the CSS pseudo-selectors,
-          # it's planned for 2.0 but for now we'll have to ignore those rules
-          selector_s = selector.to_s
-          
-          if selector_s.include? ':'
-            next
-          end
-          
-          if self.matches? selector.to_s
-            @style.add_declarations! rs.declarations
-            break
+      document.stylesheets.each do |stylesheet|
+        if !stylesheet
+          next
+        end
+
+        stylesheet.rule_sets.each do |rs|
+          for selector in rs.selectors
+            # FIXME: Nokogiri doesn't support many of the CSS pseudo-selectors,
+            # it's planned for 2.0 but for now we'll have to ignore those rules
+            selector_s = selector.to_s
+
+            if selector_s.include? ':' or
+                selector_s.include? '@page'
+              next
+            end
+
+            if self.matches? selector.to_s
+              @style.add_declarations! rs.declarations
+              break
+            end
           end
         end
       end
-      
+
       # Then append the inline style if any
       if self['style']
         inline_decls = CSSPool::CSS::InlineParser.new.parse(self['style'])
         @style.add_declarations! inline_decls
       end
-      
+
       # Look for inherited properties among its parents
       n = self
       while (n = n.parent) and n != document.root
         @style << n.style
       end
-      
+
       @style
     end
   end
 
   class Document
-    attr_accessor :stylesheet
-    
-    # Concatenate the document stylesheets, then parse the result with CSSPool
-    def stylesheet_init(args=Hash.new)
-      openuri = args[:openuri] || File.open
-      
-      sheet, head = CSSPool::CSS::DEFAULT_STYLESHEET, xpath("/xmlns:html/xmlns:head")
+    def stylesheets_setup(args=Hash.new)
+      @openuri = args[:openuri] || File.open
+    end
+
+    def stylesheets
+      if @stylesheets != nil
+        return @stylesheets
+      end
+
+      @stylesheets = [ CSSPool::CSS::DEFAULT_STYLESHEET ]
+
+      head = xpath("/xmlns:html/xmlns:head")
       head.xpath(".//xmlns:style | .//xmlns:link[@rel='stylesheet']").each do |node|
         if node.name == 'style'
-          sheet << node.content << "\n"
+          @stylesheets << CSSPool::SAC::Parser.new.parse(node.content)
         else
-          sheet << openuri.(node['href']).force_encoding('UTF-8') << "\n"
+          @stylesheets << CSSPool::SAC::Parser.new.parse(@openuri.(node['href']).force_encoding('UTF-8'))
         end
       end
-      
-      @stylesheet = CSSPool::SAC::Parser.new.parse(sheet)
+
+      @stylesheets
     end
   end
 end
@@ -321,21 +335,21 @@ class ADEAnnotation
 
     return node
   end
-  
+
   def wraptext(inode, text=nil)
     if inode.name == 'br'
       Nokogiri::XML::Builder.with(@lastblock) do |b| b.br end
       return
     end
-    
+
     if text == nil
       text = inode.content
     end
-    
+
     if not /[^\s]/ =~ text
       return
     end
-    
+
     # Look for the first parent block
     iblock, is_block = inode, true
     while iblock.parent
@@ -344,9 +358,9 @@ class ADEAnnotation
       end
       iblock, is_block = iblock.parent, false
     end
-    
+
     style, style_s, pre = inode.style, '', ''
-    
+
     [ 'background-color', 'color', 'font-style', 'font-size', 'font-weight',
       'font-variant', 'text-decoration', 'text-transform' ].each do |property|
       if style[property] != CSSPool::CSS::Property::DEFAULTS[property].initval.to_s
@@ -354,7 +368,7 @@ class ADEAnnotation
         pre = ' '
       end
     end
-    
+
     if is_block
       [ 'text-align', 'white-space' ].each do |property|
         if style[property] != CSSPool::CSS::Property::DEFAULTS[property].initval.to_s
@@ -363,9 +377,9 @@ class ADEAnnotation
         end
       end
     end
-    
+
     attributes = (style_s != "") ? { :style => style_s } : Hash.new
-    
+
     # Check whether we're in the same block or a new one
     if is_block
       # the input node is a new block itself
@@ -375,14 +389,14 @@ class ADEAnnotation
       }
       return
     end
-    
+
     if @previblock != iblock
       # the input block isn't the same anymore, create a new paragraph
       @xhtml.p {
         @previblock, @lastblock = iblock, @xhtml.parent
       }
     end
-    
+
     Nokogiri::XML::Builder.with(@lastblock) do |b|
       if !attributes.empty?
         b.span text, attributes
@@ -395,7 +409,7 @@ class ADEAnnotation
   def extract(annotfn, epubfn)
     builder = Nokogiri::XML::Builder.new(:encoding => 'UTF-8') do |xhtml|
       @xhtml = xhtml
-      
+
       xhtml.doc.create_internal_subset(
         'html',
         "-//W3C//DTD XHTML 1.1//EN",
@@ -403,12 +417,12 @@ class ADEAnnotation
       )
 
       annotdoc = nil
-      
+
       Zip::Archive.open(epubfn) do |ar|
         File.open(annotfn) do |f|
           annotdoc = Nokogiri::XML(f)
         end
-        
+
         title = annotdoc.at_xpath("//xmlns:publication//dc:title").content
 
         xhtml.html('xmlns' => 'http://www.w3.org/1999/xhtml') {
@@ -423,16 +437,15 @@ class ADEAnnotation
         span.AnnotTitle { font-weight:bold; }
         span.AnnotDate { font-size:90%; color:sienna; }
         div.AnnotationBody { margin-left:8px; margin-top:3px; }
-        
-              FIN
+    FIN
           }
 
           xhtml.body {
             xdoc, xdocfn = nil, nil
-                     
+
             annotdoc.xpath("//xmlns:annotation").each do |annot|
               @previblock, @lastblock = nil, nil
-                     
+
               xhtml.div(:class => "Annotation") {
                 xhtml.div(:class => "AnnotationTitle") {
                   xhtml.span title, :class => "AnnotTitle"
@@ -440,12 +453,12 @@ class ADEAnnotation
                   xhtml.span date.strftime("%Y-%m-%d %H:%M:%S"), :class => "AnnotDate"
                 }
 
-                xhtml.div(:class => "AnnotationBody") {                                                      
+                xhtml.div(:class => "AnnotationBody") {
                   fragment = annot.at_xpath(".//xmlns:target//xmlns:fragment")
 
                   startfn, startnode_i, startbyte = unpackpoint(fragment["start"])
                   endfn, endnode_i, endbyte = unpackpoint(fragment["end"])
-                                                      
+
                   startdir = Pathname.new(startfn).parent
 
                   if startfn != endfn
@@ -455,13 +468,13 @@ class ADEAnnotation
                   if !xdocfn or xdocfn != startfn
                     ar.fopen(startfn) do |f|
                       xdoc, xdocfn = Nokogiri::XML(f), startfn
-                    end                           
+                    end
+
+                    xdoc.stylesheets_setup(:openuri => lambda {|filename|
+                            abspath = startdir + Pathname.new(filename)
+                            ar.fopen(abspath.to_s) do |f| f.read end
+                          })
                   end
-                                                      
-                  xdoc.stylesheet_init(:openuri => lambda {|filename|
-                          abspath = startdir + Pathname.new(filename)
-                          ar.fopen(abspath.to_s) do |f| f.read end
-                        })
 
                   startnode = node_at(xdoc, startnode_i)
                   endnode = node_at(xdoc, endnode_i)
@@ -476,28 +489,28 @@ class ADEAnnotation
                       if node != nil
                         wraptext node
                       end
-                            
+
                       # Look for the next text node (but is it always a text node?)
                       begin
                         # first climb back to the first parent which can be incremented
                         while node_i[-1] + 1 > node_at(xdoc, node_i[0..-2]).children.size
                           node_i.delete_at(-1)
                         end
-                                                
+
                         if node_i.empty?
                           puts "EOF reached, something went wrong."
                         end
-                        
+
                         node_i[-1] += 1
-                        
+
                         # then go down until we reach a childless node
                         while !node_at(xdoc, node_i).children.empty?
                           node_i << 1
                         end
-                                                
+
                         node = node_at(xdoc, node_i)
                       end until node.text? or node.name == 'br'
-                    end 
+                    end
 
                     wraptext endnode, endnode.content.byteslice(0..endbyte)
                   end
