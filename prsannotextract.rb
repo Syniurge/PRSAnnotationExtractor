@@ -8,16 +8,6 @@
 # License: MIT
 # Date (version): 2013-09-27
 
-# NOTE: initially the script was only extracting the text but the 
-# version I'm releasing also preserves parts of the style. However the 
-# CSS selector match checks make the previously lightning fast script 
-# now exponentially crawl and the extraction can take up to one minute 
-# for two annotations. It's really not ideal because we might want to 
-# gather all the annotations on the reader and some people have hundreds 
-# of them, so although the script can be useful in its current state 
-# I'll look for a more efficient way to test for CSS selectors (cache 
-# node's styles?).
-
 require 'nokogiri'
 require 'csspool'
 
@@ -238,11 +228,15 @@ end
 module Nokogiri::XML
   class Node
     # I'm not sure how browsers do this efficiently, but it's probably not by doing that
-    def style(cssdoc)
-      retval = CSSPool::CSS::Style.new
+    def style
+      if @style
+        return @style
+      end
+      
+      @style = CSSPool::CSS::Style.new
       
       # First refer to the cssdoc stylesheet
-      cssdoc.rule_sets.each do |rs|
+      document.stylesheet.rule_sets.each do |rs|
         for selector in rs.selectors
           # FIXME: Nokogiri doesn't support many of the CSS pseudo-selectors,
           # it's planned for 2.0 but for now we'll have to ignore those rules
@@ -253,7 +247,7 @@ module Nokogiri::XML
           end
           
           if self.matches? selector.to_s
-            retval.add_declarations! rs.declarations
+            @style.add_declarations! rs.declarations
             break
           end
         end
@@ -262,22 +256,24 @@ module Nokogiri::XML
       # Then append the inline style if any
       if self['style']
         inline_decls = CSSPool::CSS::InlineParser.new.parse(self['style'])
-        retval.add_declarations! inline_decls
+        @style.add_declarations! inline_decls
       end
       
       # Look for inherited properties among its parents
       n = self
       while (n = n.parent) and n != document.root
-        retval << n.style(cssdoc)
+        @style << n.style
       end
       
-      retval
+      @style
     end
   end
 
   class Document
+    attr_accessor :stylesheet
+    
     # Concatenate the document stylesheets, then parse the result with CSSPool
-    def stylesheet(args=Hash.new)
+    def stylesheet_init(args=Hash.new)
       openuri = args[:openuri] || File.open
       
       sheet, head = CSSPool::CSS::DEFAULT_STYLESHEET, xpath("/xmlns:html/xmlns:head")
@@ -289,7 +285,7 @@ module Nokogiri::XML
         end
       end
       
-      CSSPool::SAC::Parser.new.parse(sheet)
+      @stylesheet = CSSPool::SAC::Parser.new.parse(sheet)
     end
   end
 end
@@ -327,6 +323,11 @@ class ADEAnnotation
   end
   
   def wraptext(inode, text=nil)
+    if inode.name == 'br'
+      Nokogiri::XML::Builder.with(@lastblock) do |b| b.br end
+      return
+    end
+    
     if text == nil
       text = inode.content
     end
@@ -338,16 +339,16 @@ class ADEAnnotation
     # Look for the first parent block
     iblock, is_block = inode, true
     while iblock.parent
-      if iblock.style(@stylesheet)['display'] != 'inline'
+      if iblock.style['display'] != 'inline'
         break
       end
       iblock, is_block = iblock.parent, false
     end
     
-    style, style_s, pre = inode.style(@stylesheet), '', ''
+    style, style_s, pre = inode.style, '', ''
     
-    [ 'color', 'font-style', 'font-size', 'font-weight', 'font-variant', 
-      'text-decoration', 'text-transform' ].each do |property|
+    [ 'background-color', 'color', 'font-style', 'font-size', 'font-weight',
+      'font-variant', 'text-decoration', 'text-transform' ].each do |property|
       if style[property] != CSSPool::CSS::Property::DEFAULTS[property].initval.to_s
         style_s += "#{pre}#{property}:#{style[property]};"
         pre = ' '
@@ -401,7 +402,7 @@ class ADEAnnotation
         "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"
       )
 
-      annotdoc, xdoc = nil, nil
+      annotdoc = nil
       
       Zip::Archive.open(epubfn) do |ar|
         File.open(annotfn) do |f|
@@ -415,16 +416,20 @@ class ADEAnnotation
             xhtml.meta(:'http-equiv' => "content-type",
                       :content => "application/xhtml+xml; charset=UTF-8")
             xhtml.style <<-FIN
+
         div#wrapper { margin:0 auto; background-color:#d8d880; }
         div.Annotation { margin:10px 0; border:thin dotted #080808; background-color:#f2f2ff; max-width:750px; }
         div.AnnotationTitle { margin-left:2px; }
         span.AnnotTitle { font-weight:bold; }
         span.AnnotDate { font-size:90%; color:sienna; }
         div.AnnotationBody { margin-left:8px; margin-top:3px; }
+        
               FIN
           }
 
           xhtml.body {
+            xdoc, xdocfn = nil, nil
+                     
             annotdoc.xpath("//xmlns:annotation").each do |annot|
               @previblock, @lastblock = nil, nil
                      
@@ -447,11 +452,13 @@ class ADEAnnotation
                     puts "Annotation spans multiple files, not implemented!"
                   end
 
-                  ar.fopen(startfn) do |f|
-                    xdoc = Nokogiri::XML(f)
+                  if !xdocfn or xdocfn != startfn
+                    ar.fopen(startfn) do |f|
+                      xdoc, xdocfn = Nokogiri::XML(f), startfn
+                    end                           
                   end
                                                       
-                  @stylesheet = xdoc.stylesheet(:openuri => lambda {|filename|
+                  xdoc.stylesheet_init(:openuri => lambda {|filename|
                           abspath = startdir + Pathname.new(filename)
                           ar.fopen(abspath.to_s) do |f| f.read end
                         })
@@ -489,7 +496,7 @@ class ADEAnnotation
                         end
                                                 
                         node = node_at(xdoc, node_i)
-                      end until node.text?
+                      end until node.text? or node.name == 'br'
                     end 
 
                     wraptext endnode, endnode.content.byteslice(0..endbyte)
