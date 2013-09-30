@@ -6,6 +6,12 @@ token SLASH NUMBER MINUS LENGTH PERCENTAGE EMS EXS ANGLE TIME FREQ URI
 token IMPORTANT_SYM MEDIA_SYM
 
 rule
+  inlineruleset
+    : {}
+    | '' | S
+    | declarations
+    ;
+
   declarations
     : declaration SEMI declarations
     | declaration SEMI

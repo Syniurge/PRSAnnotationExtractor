@@ -38,7 +38,7 @@ rule
             {w}@charset{w}   { [:CHARSET_SYM, st(text)] }
             {w}@media{w}     { [:MEDIA_SYM, st(text)] }
             {w}!({w}|{w}{comment}{w})important{w}  { [:IMPORTANT_SYM, st(text)] }
-            {ident}          { [:IDENT, st(text)] }
+            {w}{ident}          { [:IDENT, st(text)] }
             \#{name}         { [:HASH, st(text)] }
             {w}~={w}         { [:INCLUDES, st(text)] }
             {w}\|={w}        { [:DASHMATCH, st(text)] }
@@ -75,8 +75,8 @@ rule
             -->              { [:CDC, st(text)] }
             {w}\-(?!{ident}){w}   { [:MINUS, st(text)] }
             {w}\+{w}         { [:PLUS, st(text)] }
-            
-            
+
+
             [\s]+            { [:S, st(text)] }
             {string}         { [:STRING, st(text)] }
             {invalid}        { [:INVALID, st(text)] }

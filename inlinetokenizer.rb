@@ -16,6 +16,7 @@ class InlineTokenizerBase < InlineParserBase
   attr_accessor :state
 
   def scan_setup(str)
+#     @yydebug = true
     @ss = StringScanner.new(str)
     @lineno =  1
     @state  = nil
@@ -46,7 +47,7 @@ class InlineTokenizerBase < InlineParserBase
 
   def next_token
     return if @ss.eos?
-    
+
     # skips empty actions
     until token = _next_token or @ss.eos?; end
     token
@@ -58,151 +59,151 @@ class InlineTokenizerBase < InlineParserBase
     token = case @state
     when nil
       case
-      when (text = @ss.scan(/url\([\s]*("([^\n\r\f\\"]|\\\n|\r\n|\r|\f|[^\0-\177]|\\[0-9A-Fa-f]{1,6}(\r\n|[\s])?|\\[^\n\r\f0-9A-Fa-f])*"|'([^\n\r\f\\']|\\\n|\r\n|\r|\f|[^\0-\177]|\\[0-9A-Fa-f]{1,6}(\r\n|[\s])?|\\[^\n\r\f0-9A-Fa-f])*')[\s]*\)/i))
+      when (text = @ss.scan(/url\([\s]*("([^\n\r\f\\"]|\\\n|\r\n|\r|\f|[^\0-\177]|\\[0-9A-Fa-f]{1,6}(\r\n|[\s])?|\\[^\n\r\f0-9A-Fa-f])*"|'([^\n\r\f\\']|\\\n|\r\n|\r|\f|[^\0-\177]|\\[0-9A-Fa-f]{1,6}(\r\n|[\s])?|\\[^\n\r\f0-9A-Fa-f])*')[\s]*\)/))
          action { [:URI, st(text)] }
 
-      when (text = @ss.scan(/url\([\s]*([!#\$%&*-~]|[^\0-\177]|\\[0-9A-Fa-f]{1,6}(\r\n|[\s])?|\\[^\n\r\f0-9A-Fa-f])*[\s]*\)/i))
+      when (text = @ss.scan(/url\([\s]*([!#\$%&*-~]|[^\0-\177]|\\[0-9A-Fa-f]{1,6}(\r\n|[\s])?|\\[^\n\r\f0-9A-Fa-f])*[\s]*\)/))
          action { [:URI, st(text)] }
 
-      when (text = @ss.scan(/U\+[0-9a-fA-F?]{1,6}(-[0-9a-fA-F]{1,6})?/i))
+      when (text = @ss.scan(/U\+[0-9a-fA-F?]{1,6}(-[0-9a-fA-F]{1,6})?/))
          action {[:UNICODE_RANGE, st(text)] }
 
-      when (text = @ss.scan(/[\s]*\/\*(.|[\s]*)*?\*\/[\s]*/i))
+      when (text = @ss.scan(/[\s]*\/\*(.|[\s]*)*?\*\/[\s]*/))
          action { next_token }
 
-      when (text = @ss.scan(/[-@]?([_A-Za-z]|[^\0-\177]|\\[0-9A-Fa-f]{1,6}(\r\n|[\s])?|\\[^\n\r\f0-9A-Fa-f])([_A-Za-z0-9-]|[^\0-\177]|\\[0-9A-Fa-f]{1,6}(\r\n|[\s])?|\\[^\n\r\f0-9A-Fa-f]|[.])*\(\s*/i))
+      when (text = @ss.scan(/[-@]?([_A-Za-z]|[^\0-\177]|\\[0-9A-Fa-f]{1,6}(\r\n|[\s])?|\\[^\n\r\f0-9A-Fa-f])([_A-Za-z0-9-]|[^\0-\177]|\\[0-9A-Fa-f]{1,6}(\r\n|[\s])?|\\[^\n\r\f0-9A-Fa-f]|[.])*\(\s*/))
          action { [:FUNCTION, st(text)] }
 
-      when (text = @ss.scan(/[\s]*@import[\s]*/i))
+      when (text = @ss.scan(/[\s]*@import[\s]*/))
          action { [:IMPORT_SYM, st(text)] }
 
-      when (text = @ss.scan(/[\s]*@page[\s]*/i))
+      when (text = @ss.scan(/[\s]*@page[\s]*/))
          action { [:PAGE_SYM, st(text)] }
 
-      when (text = @ss.scan(/[\s]*@charset[\s]*/i))
+      when (text = @ss.scan(/[\s]*@charset[\s]*/))
          action { [:CHARSET_SYM, st(text)] }
 
-      when (text = @ss.scan(/[\s]*@media[\s]*/i))
+      when (text = @ss.scan(/[\s]*@media[\s]*/))
          action { [:MEDIA_SYM, st(text)] }
 
-      when (text = @ss.scan(/[\s]*!([\s]*|[\s]*\/\*(.|[\s]*)*?\*\/[\s]*)important[\s]*/i))
+      when (text = @ss.scan(/[\s]*!([\s]*|[\s]*\/\*(.|[\s]*)*?\*\/[\s]*)important[\s]*/))
          action { [:IMPORTANT_SYM, st(text)] }
 
-      when (text = @ss.scan(/[-@]?([_A-Za-z]|[^\0-\177]|\\[0-9A-Fa-f]{1,6}(\r\n|[\s])?|\\[^\n\r\f0-9A-Fa-f])([_A-Za-z0-9-]|[^\0-\177]|\\[0-9A-Fa-f]{1,6}(\r\n|[\s])?|\\[^\n\r\f0-9A-Fa-f])*/i))
+      when (text = @ss.scan(/[\s]*[-@]?([_A-Za-z]|[^\0-\177]|\\[0-9A-Fa-f]{1,6}(\r\n|[\s])?|\\[^\n\r\f0-9A-Fa-f])([_A-Za-z0-9-]|[^\0-\177]|\\[0-9A-Fa-f]{1,6}(\r\n|[\s])?|\\[^\n\r\f0-9A-Fa-f])*/))
          action { [:IDENT, st(text)] }
 
-      when (text = @ss.scan(/\#([_A-Za-z0-9-]|[^\0-\177]|\\[0-9A-Fa-f]{1,6}(\r\n|[\s])?|\\[^\n\r\f0-9A-Fa-f])+/i))
+      when (text = @ss.scan(/\#([_A-Za-z0-9-]|[^\0-\177]|\\[0-9A-Fa-f]{1,6}(\r\n|[\s])?|\\[^\n\r\f0-9A-Fa-f])+/))
          action { [:HASH, st(text)] }
 
-      when (text = @ss.scan(/[\s]*~=[\s]*/i))
+      when (text = @ss.scan(/[\s]*~=[\s]*/))
          action { [:INCLUDES, st(text)] }
 
-      when (text = @ss.scan(/[\s]*\|=[\s]*/i))
+      when (text = @ss.scan(/[\s]*\|=[\s]*/))
          action { [:DASHMATCH, st(text)] }
 
-      when (text = @ss.scan(/[\s]*\^=[\s]*/i))
+      when (text = @ss.scan(/[\s]*\^=[\s]*/))
          action { [:PREFIXMATCH, st(text)] }
 
-      when (text = @ss.scan(/[\s]*\$=[\s]*/i))
+      when (text = @ss.scan(/[\s]*\$=[\s]*/))
          action { [:SUFFIXMATCH, st(text)] }
 
-      when (text = @ss.scan(/[\s]*\*=[\s]*/i))
+      when (text = @ss.scan(/[\s]*\*=[\s]*/))
          action { [:SUBSTRINGMATCH, st(text)] }
 
-      when (text = @ss.scan(/[\s]*!=[\s]*/i))
+      when (text = @ss.scan(/[\s]*!=[\s]*/))
          action { [:NOT_EQUAL, st(text)] }
 
-      when (text = @ss.scan(/[\s]*=[\s]*/i))
+      when (text = @ss.scan(/[\s]*=[\s]*/))
          action { [:EQUAL, st(text)] }
 
-      when (text = @ss.scan(/[\s]*\)/i))
+      when (text = @ss.scan(/[\s]*\)/))
          action { [:RPAREN, st(text)] }
 
-      when (text = @ss.scan(/[\s]*\[[\s]*/i))
+      when (text = @ss.scan(/[\s]*\[[\s]*/))
          action { [:LSQUARE, st(text)] }
 
-      when (text = @ss.scan(/[\s]*\]/i))
+      when (text = @ss.scan(/[\s]*\]/))
          action { [:RSQUARE, st(text)] }
 
-      when (text = @ss.scan(/[\s]*\+[\s]*/i))
+      when (text = @ss.scan(/[\s]*\+[\s]*/))
          action { [:PLUS, st(text)] }
 
-      when (text = @ss.scan(/[\s]*\{[\s]*/i))
+      when (text = @ss.scan(/[\s]*\{[\s]*/))
          action { [:LBRACE, st(text)] }
 
-      when (text = @ss.scan(/[\s]*\}[\s]*/i))
+      when (text = @ss.scan(/[\s]*\}[\s]*/))
          action { [:RBRACE, st(text)] }
 
-      when (text = @ss.scan(/[\s]*>[\s]*/i))
+      when (text = @ss.scan(/[\s]*>[\s]*/))
          action { [:GREATER, st(text)] }
 
-      when (text = @ss.scan(/[\s]*,[\s]*/i))
+      when (text = @ss.scan(/[\s]*,[\s]*/))
          action { [:COMMA, st(',')] }
 
-      when (text = @ss.scan(/[\s]*;[\s]*/i))
+      when (text = @ss.scan(/[\s]*;[\s]*/))
          action { [:SEMI, st(';')] }
 
-      when (text = @ss.scan(/\*/i))
+      when (text = @ss.scan(/\*/))
          action { [:STAR, st(text)] }
 
-      when (text = @ss.scan(/[\s]*~[\s]*/i))
+      when (text = @ss.scan(/[\s]*~[\s]*/))
          action { [:TILDE, st(text)] }
 
-      when (text = @ss.scan(/\:not\([\s]*/i))
+      when (text = @ss.scan(/\:not\([\s]*/))
          action { [:NOT, st(text)]  }
 
-      when (text = @ss.scan(/[\s]*([0-9]*\.[0-9]+|[0-9]+)em[\s]*/i))
+      when (text = @ss.scan(/[\s]*([0-9]*\.[0-9]+|[0-9]+)em[\s]*/))
          action { [:EMS, st(text)] }
 
-      when (text = @ss.scan(/[\s]*([0-9]*\.[0-9]+|[0-9]+)ex[\s]*/i))
+      when (text = @ss.scan(/[\s]*([0-9]*\.[0-9]+|[0-9]+)ex[\s]*/))
          action { [:EXS, st(text)] }
 
-      when (text = @ss.scan(/[\s]*([0-9]*\.[0-9]+|[0-9]+)(px|cm|mm|in|pt|pc)[\s]*/i))
+      when (text = @ss.scan(/[\s]*([0-9]*\.[0-9]+|[0-9]+)(px|cm|mm|in|pt|pc)[\s]*/))
          action { [:LENGTH, st(text)] }
 
-      when (text = @ss.scan(/[\s]*([0-9]*\.[0-9]+|[0-9]+)(deg|rad|grad)[\s]*/i))
+      when (text = @ss.scan(/[\s]*([0-9]*\.[0-9]+|[0-9]+)(deg|rad|grad)[\s]*/))
          action { [:ANGLE, st(text)] }
 
-      when (text = @ss.scan(/[\s]*([0-9]*\.[0-9]+|[0-9]+)(ms|s)[\s]*/i))
+      when (text = @ss.scan(/[\s]*([0-9]*\.[0-9]+|[0-9]+)(ms|s)[\s]*/))
          action { [:TIME, st(text)] }
 
-      when (text = @ss.scan(/[\s]*([0-9]*\.[0-9]+|[0-9]+)[k]?hz[\s]*/i))
+      when (text = @ss.scan(/[\s]*([0-9]*\.[0-9]+|[0-9]+)[k]?hz[\s]*/))
          action { [:FREQ, st(text)] }
 
-      when (text = @ss.scan(/[\s]*([0-9]*\.[0-9]+|[0-9]+)%[\s]*/i))
+      when (text = @ss.scan(/[\s]*([0-9]*\.[0-9]+|[0-9]+)%[\s]*/))
          action { [:PERCENTAGE, st(text)] }
 
-      when (text = @ss.scan(/[\s]*([0-9]*\.[0-9]+|[0-9]+)[\s]*/i))
+      when (text = @ss.scan(/[\s]*([0-9]*\.[0-9]+|[0-9]+)[\s]*/))
          action { [:NUMBER, st(text)] }
 
-      when (text = @ss.scan(/[\s]*\/\/[\s]*/i))
+      when (text = @ss.scan(/[\s]*\/\/[\s]*/))
          action { [:DOUBLESLASH, st(text)] }
 
-      when (text = @ss.scan(/[\s]*\/[\s]*/i))
+      when (text = @ss.scan(/[\s]*\/[\s]*/))
          action { [:SLASH, st('/')] }
 
-      when (text = @ss.scan(/<!--/i))
+      when (text = @ss.scan(/<!--/))
          action { [:CDO, st(text)] }
 
-      when (text = @ss.scan(/-->/i))
+      when (text = @ss.scan(/-->/))
          action { [:CDC, st(text)] }
 
-      when (text = @ss.scan(/[\s]*\-(?![-@]?([_A-Za-z]|[^\0-\177]|\\[0-9A-Fa-f]{1,6}(\r\n|[\s])?|\\[^\n\r\f0-9A-Fa-f])([_A-Za-z0-9-]|[^\0-\177]|\\[0-9A-Fa-f]{1,6}(\r\n|[\s])?|\\[^\n\r\f0-9A-Fa-f])*)[\s]*/i))
+      when (text = @ss.scan(/[\s]*\-(?![-@]?([_A-Za-z]|[^\0-\177]|\\[0-9A-Fa-f]{1,6}(\r\n|[\s])?|\\[^\n\r\f0-9A-Fa-f])([_A-Za-z0-9-]|[^\0-\177]|\\[0-9A-Fa-f]{1,6}(\r\n|[\s])?|\\[^\n\r\f0-9A-Fa-f])*)[\s]*/))
          action { [:MINUS, st(text)] }
 
-      when (text = @ss.scan(/[\s]*\+[\s]*/i))
+      when (text = @ss.scan(/[\s]*\+[\s]*/))
          action { [:PLUS, st(text)] }
 
-      when (text = @ss.scan(/[\s]+/i))
+      when (text = @ss.scan(/[\s]+/))
          action { [:S, st(text)] }
 
-      when (text = @ss.scan(/("([^\n\r\f\\"]|\\\n|\r\n|\r|\f|[^\0-\177]|\\[0-9A-Fa-f]{1,6}(\r\n|[\s])?|\\[^\n\r\f0-9A-Fa-f])*"|'([^\n\r\f\\']|\\\n|\r\n|\r|\f|[^\0-\177]|\\[0-9A-Fa-f]{1,6}(\r\n|[\s])?|\\[^\n\r\f0-9A-Fa-f])*')/i))
+      when (text = @ss.scan(/("([^\n\r\f\\"]|\\\n|\r\n|\r|\f|[^\0-\177]|\\[0-9A-Fa-f]{1,6}(\r\n|[\s])?|\\[^\n\r\f0-9A-Fa-f])*"|'([^\n\r\f\\']|\\\n|\r\n|\r|\f|[^\0-\177]|\\[0-9A-Fa-f]{1,6}(\r\n|[\s])?|\\[^\n\r\f0-9A-Fa-f])*')/))
          action { [:STRING, st(text)] }
 
-      when (text = @ss.scan(/("([^\n\r\f\\"]|\\\n|\r\n|\r|\f|[^\0-\177]|\\[0-9A-Fa-f]{1,6}(\r\n|[\s])?|\\[^\n\r\f0-9A-Fa-f])*|'([^\n\r\f\\']|\\\n|\r\n|\r|\f|[^\0-\177]|\\[0-9A-Fa-f]{1,6}(\r\n|[\s])?|\\[^\n\r\f0-9A-Fa-f])*)/i))
+      when (text = @ss.scan(/("([^\n\r\f\\"]|\\\n|\r\n|\r|\f|[^\0-\177]|\\[0-9A-Fa-f]{1,6}(\r\n|[\s])?|\\[^\n\r\f0-9A-Fa-f])*|'([^\n\r\f\\']|\\\n|\r\n|\r|\f|[^\0-\177]|\\[0-9A-Fa-f]{1,6}(\r\n|[\s])?|\\[^\n\r\f0-9A-Fa-f])*)/))
          action { [:INVALID, st(text)] }
 
-      when (text = @ss.scan(/./i))
+      when (text = @ss.scan(/./))
          action { [st(text), st(text)] }
 
       else

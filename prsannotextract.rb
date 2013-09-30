@@ -135,7 +135,7 @@ module CSSPool::CSS
     attr_accessor :handler
 
     def initialize handler = InlineHandler.new
-      @handler = handler
+      @handler = InlineHandler.new
     end
 
     def parse string
@@ -469,6 +469,12 @@ class ADEAnnotation
                     ar.fopen(startfn) do |f|
                       xdoc, xdocfn = Nokogiri::XML(f), startfn
                     end
+
+                    # "Point" indices consider that comments aren't node worthy
+                    xdoc.xpath('//comment()').remove
+
+                    # Merge consecutive text nodes that results from the comments deletion
+                    xdoc = Nokogiri::XML.parse xdoc.canonicalize
 
                     xdoc.stylesheets_setup(:openuri => lambda {|filename|
                             abspath = startdir + Pathname.new(filename)
