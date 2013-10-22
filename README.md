@@ -3,7 +3,7 @@ PRSAnnotationExtractor
 
 A Ruby script that extracts ePub highlights from pre-PRS-T1 Sony readers and possibly other ADE-based devices. It includes Nokogiri and CSSPool additions to implement something akin to getComputedStyle in JS (the actual text extraction part doesn't take more than 150 lines, and what remains is the style stuff).
 
-Previously on Linux there was no way to extract those as far as I know (Sony Reader Library seems to work on Wine but nor it nor ADE does recognize the reader). It's probably very late to release this since there have been 3 generations of readers since then that brought a different way to store annotations, but such a tool was never made and I have accumulated too many annotations to count over those 2 years.
+Previously on Linux there was no way to extract those as far as I know (Sony Reader Library seems to work on Wine but neither it nor ADE does recognize the reader). It's probably very late to release this since there have been 3 generations of readers since then that brought a different way to store annotations, but such a tool was never made and I have accumulated too many annotations to count over those 2 years.
 
 Prerequisites
 ------------
